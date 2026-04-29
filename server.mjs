@@ -12,8 +12,10 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const JANE_VOICE_ID = "wScwPA1qCkWo5R2dmlS8";
-const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
-const GEMINI_MODEL_ID = process.env.GEMINI_MODEL_ID || "gemini-1.5-flash";
+const ELEVENLABS_MODEL_ID =
+  process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
+const GEMINI_MODEL_ID =
+  process.env.GEMINI_MODEL_ID || "gemini-1.5-flash";
 
 const JANE_SYSTEM_PROMPT = `
 You are Jane, C.J.'s personal AI companion.
@@ -95,11 +97,13 @@ app.post("/api/chat", async (req, res) => {
     }
 
     const data = await geminiResponse.json();
+
     const reply =
       data?.candidates?.[0]?.content?.parts
-        ?.map(part => part.text || "")
+        ?.map((part) => part.text || "")
         .join("")
-        .trim() || "I’m here, but I do not have a reply ready.";
+        .trim() ||
+      "I’m here, but I do not have a reply ready.";
 
     res.json({ reply });
   } catch (error) {
@@ -132,7 +136,7 @@ app.post("/api/tts", async (req, res) => {
         headers: {
           "xi-api-key": ELEVENLABS_API_KEY,
           "Content-Type": "application/json",
-          "Accept": "audio/mpeg"
+          Accept: "audio/mpeg"
         },
         body: JSON.stringify({
           text,
