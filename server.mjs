@@ -1,4 +1,3 @@
-
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,11 +16,7 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
@@ -35,17 +30,12 @@ app.get("/", (req, res) => {
 app.post("/api/tts", async (req, res) => {
   try {
     if (!ELEVENLABS_API_KEY) {
-      return res.status(500).json({
-        error: "Missing ELEVENLABS_API_KEY environment variable."
-      });
+      return res.status(500).json({ error: "Missing ELEVENLABS_API_KEY environment variable." });
     }
 
     const text = String(req.body?.text || "").trim();
-
     if (!text) {
-      return res.status(400).json({
-        error: "Missing text."
-      });
+      return res.status(400).json({ error: "Missing text." });
     }
 
     const elevenResponse = await fetch(
@@ -70,4 +60,20 @@ app.post("/api/tts", async (req, res) => {
       }
     );
 
-    if
+    if (!elevenResponse.ok) {
+      const errorText = await elevenResponse.text();
+      return res.status(elevenResponse.status).json({ error: errorText });
+    }
+
+    const audioBuffer = Buffer.from(await elevenResponse.arrayBuffer());
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(audioBuffer);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Text-to-speech failed." });
+  }
+});
+
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Jane AI Assistant backend running on port ${port}`);
+});
