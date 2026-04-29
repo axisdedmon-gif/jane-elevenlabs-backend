@@ -15,7 +15,7 @@ const JANE_VOICE_ID = "wScwPA1qCkWo5R2dmlS8";
 const ELEVENLABS_MODEL_ID =
   process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
 const GEMINI_MODEL_ID =
-  process.env.GEMINI_MODEL_ID || "gemini-1.5-flash";
+  process.env.GEMINI_MODEL_ID || "gemini-3.1-flash-lite-preview";
 
 const JANE_SYSTEM_PROMPT = `
 You are Jane, C.J.'s personal AI companion.
@@ -47,14 +47,66 @@ app.get("/", (req, res) => {
   res.send("Jane backend is running.");
 });
 
+async function getGeminiReply(message, maxOutputTokens = 350) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing GEMINI_API_KEY environment variable.");
+  }
+
+  const geminiResponse = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: JANE_SYSTEM_PROMPT }]
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: message }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.8,
+          topP: 0.95,
+          maxOutputTokens
+        }
+      })
+    }
+  );
+
+  const data = await geminiResponse.json();
+
+  if (!geminiResponse.ok) {
+    const details = JSON.stringify(data);
+    throw new Error(`Gemini error ${geminiResponse.status}: ${details}`);
+  }
+
+  const reply =
+    data?.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text || "")
+      .join("")
+      .trim() || "I’m here, but I do not have a reply ready.";
+
+  return reply;
+}
+
+app.get("/api/chat-test", async (req, res) => {
+  try {
+    const reply = await getGeminiReply("Tell me a short riddle.", 120);
+    res.json({ reply });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message || "Gemini test failed."
+    });
+  }
+});
+
 app.post("/api/chat", async (req, res) => {
   try {
-    if (!GEMINI_API_KEY) {
-      return res.status(500).json({
-        error: "Missing GEMINI_API_KEY environment variable."
-      });
-    }
-
     const message = String(req.body?.message || "").trim();
 
     if (!message) {
@@ -63,50 +115,12 @@ app.post("/api/chat", async (req, res) => {
       });
     }
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_ID}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: JANE_SYSTEM_PROMPT }]
-          },
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: message }]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.8,
-            topP: 0.95,
-            maxOutputTokens: 350
-          }
-        })
-      }
-    );
-
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      return res.status(geminiResponse.status).json({
-        error: errorText
-      });
-    }
-
-    const data = await geminiResponse.json();
-
-    const reply =
-      data?.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text || "")
-        .join("")
-        .trim() ||
-      "I’m here, but I do not have a reply ready.";
+    const reply = await getGeminiReply(message, 350);
 
     res.json({ reply });
   } catch (error) {
+    console.error("Gemini chat error:", error.message);
+
     res.status(500).json({
       error: error.message || "Gemini chat failed."
     });
@@ -164,6 +178,8 @@ app.post("/api/tts", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.send(audioBuffer);
   } catch (error) {
+    console.error("ElevenLabs TTS error:", error.message);
+
     res.status(500).json({
       error: error.message || "Text-to-speech failed."
     });
